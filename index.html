@@ -22,9 +22,10 @@
     --card-bg: #ffffff;
     --text: #222;
     --muted: #888;
+    --header-h: 90px;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html { overscroll-behavior-y: none; overflow-x: hidden; width: 100%; }
+  html { overscroll-behavior-y: none; width: 100%; }
   body {
     margin: 0;
     overflow-x: hidden;
@@ -87,7 +88,10 @@
   .breadcrumb .crumb-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
 
   .list-filter-wrap {
-    display: flex; gap: 8px; align-items: center; margin: 4px 0 14px;
+    display: flex; gap: 8px; align-items: center;
+    position: sticky; top: var(--header-h); z-index: 6;
+    background: var(--bg); margin: 0 -16px 10px; padding: 10px 16px;
+    box-shadow: 0 6px 8px -6px rgba(0,0,0,0.12);
   }
   .list-filter-wrap input {
     flex: 1; border: 1px solid #e5e0d5; border-radius: 10px; outline: none;
@@ -540,6 +544,15 @@ function doSearch() {
   setStatus(`找到 ${list.length} 条结果`);
   els.searchResults.innerHTML = list.map(detailCardHtml).join('');
 }
+
+// ============== 顶部固定区域高度（供 sticky 筛选栏定位用） ==============
+function updateHeaderHeight() {
+  const h = document.querySelector('header').offsetHeight;
+  document.documentElement.style.setProperty('--header-h', h + 'px');
+}
+updateHeaderHeight();
+window.addEventListener('load', updateHeaderHeight);
+window.addEventListener('resize', updateHeaderHeight);
 
 // ============== 初始化 ==============
 loadData().then(() => renderCurrent(navStack[0]));
