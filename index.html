@@ -94,14 +94,15 @@
     box-shadow: 0 6px 8px -6px rgba(0,0,0,0.12);
   }
   .list-filter-wrap input {
-    flex: 1; border: 1px solid #e5e0d5; border-radius: 10px; outline: none;
-    font-size: 15px; padding: 9px 12px; background: #fff;
+    flex: 1; border: 1px solid #e5e0d5; border-radius: 12px; outline: none;
+    font-size: 18px; padding: 12px 14px; background: #fff;
   }
   .list-filter-wrap input:focus { border-color: var(--accent); }
   .list-filter-clear {
-    border: none; background: #eee; color: #666; font-size: 13px;
-    padding: 8px 12px; border-radius: 10px; display: none; white-space: nowrap;
+    border: none; background: #eee; color: #666; font-size: 14px;
+    padding: 10px 14px; border-radius: 12px; display: none; white-space: nowrap;
   }
+  .sibling-label { font-size: 13px; color: var(--muted); font-weight: 600; margin: 10px 2px 8px; }
 
   .status { max-width: 560px; margin: 14px auto; padding: 0 16px; color: var(--muted); font-size: 15px; text-align: center; }
   .status.error { color: #c0392b; }
@@ -187,7 +188,15 @@
   </div>
   <div id="lotList"></div>
 </div>
-<div class="view hidden" id="view-detail"><div id="detailCard"></div></div>
+<div class="view hidden" id="view-detail">
+  <div id="detailCard"></div>
+  <div class="sibling-label">同库号其他拍品</div>
+  <div class="list-filter-wrap">
+    <input id="detailFilter" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="输入编号数字筛选">
+    <button class="list-filter-clear" id="detailFilterClear" onclick="clearDetailFilter()">清空</button>
+  </div>
+  <div id="detailLotList"></div>
+</div>
 <div class="view hidden" id="view-search"><div id="searchResults"></div></div>
 
 <div class="toast" id="toast"></div>
@@ -314,6 +323,9 @@ const els = {
   clearBtn: document.getElementById('clearBtn'),
   listFilter: document.getElementById('listFilter'),
   listFilterClear: document.getElementById('listFilterClear'),
+  detailFilter: document.getElementById('detailFilter'),
+  detailFilterClear: document.getElementById('detailFilterClear'),
+  detailLotList: document.getElementById('detailLotList'),
 };
 
 function esc(s) {
@@ -433,14 +445,9 @@ function clearListFilter() {
   renderLotList(currentGroupItems);
 }
 
-function renderLotList(items) {
-  if (!items.length) {
-    const msg = currentGroupItems.length ? '没有匹配的拍品' : '该库号下暂无拍品';
-    els.lotList.innerHTML = `<div class="empty-hint">${msg}</div>`;
-    return;
-  }
-  els.lotList.innerHTML = items.map((item, idx) => `
-    <div class="lot-list-item" onclick="openDetailFromList(${idx})">
+function lotRowsHtml(items, onclickFn) {
+  return items.map((item, idx) => `
+    <div class="lot-list-item" onclick="${onclickFn}(${idx})">
       <div class="lot-info">
         <div class="lot-no">${esc(item.lot_no)}</div>
         <div class="lot-title">${esc(item.title) || esc(item.author) || ''}</div>
@@ -450,10 +457,63 @@ function renderLotList(items) {
   `).join('');
 }
 
+function renderLotList(items) {
+  if (!items.length) {
+    const msg = currentGroupItems.length ? '没有匹配的拍品' : '该库号下暂无拍品';
+    els.lotList.innerHTML = `<div class="empty-hint">${msg}</div>`;
+    return;
+  }
+  els.lotList.innerHTML = lotRowsHtml(items, 'openDetailFromList');
+}
+
 function openDetailFromList(idx) {
   const item = displayedListItems[idx];
   const state = { view: 'detail', item };
   navStack.push(state);
+  renderCurrent(state);
+}
+
+// ============== 详情页内的“同库号其他拍品”筛选 ==============
+let currentDetailSiblings = [];
+let displayedDetailItems = [];
+
+function siblingItems(item) {
+  const group = getGroup(item.lot_no);
+  return allItems.filter(it => getGroup(it.lot_no) === group && it.lot_no !== item.lot_no)
+    .sort((a, b) => a.lot_no.localeCompare(b.lot_no, 'zh', { numeric: true }));
+}
+
+function renderDetailLotList(items) {
+  if (!items.length) {
+    const msg = currentDetailSiblings.length ? '没有匹配的拍品' : '该库号下暂无其他拍品';
+    els.detailLotList.innerHTML = `<div class="empty-hint">${msg}</div>`;
+    return;
+  }
+  els.detailLotList.innerHTML = lotRowsHtml(items, 'openDetailFromDetailList');
+}
+
+els.detailFilter.addEventListener('input', () => {
+  const q = els.detailFilter.value.trim().toLowerCase();
+  els.detailFilterClear.style.display = q ? 'block' : 'none';
+  displayedDetailItems = !q ? currentDetailSiblings : currentDetailSiblings.filter(it =>
+    it.lot_no.toLowerCase().includes(q) ||
+    it.title.toLowerCase().includes(q) ||
+    it.author.toLowerCase().includes(q)
+  );
+  renderDetailLotList(displayedDetailItems);
+});
+
+function clearDetailFilter() {
+  els.detailFilter.value = '';
+  els.detailFilterClear.style.display = 'none';
+  displayedDetailItems = currentDetailSiblings;
+  renderDetailLotList(currentDetailSiblings);
+}
+
+function openDetailFromDetailList(idx) {
+  const item = displayedDetailItems[idx];
+  const state = { view: 'detail', item };
+  navStack[navStack.length - 1] = state;
   renderCurrent(state);
 }
 
@@ -477,7 +537,14 @@ function detailCardHtml(item) {
     </div>
   `;
 }
-function renderDetail(item) { els.detailCard.innerHTML = detailCardHtml(item); }
+function renderDetail(item) {
+  els.detailCard.innerHTML = detailCardHtml(item);
+  currentDetailSiblings = siblingItems(item);
+  displayedDetailItems = currentDetailSiblings;
+  els.detailFilter.value = '';
+  els.detailFilterClear.style.display = 'none';
+  renderDetailLotList(currentDetailSiblings);
+}
 
 // ============== 复制到剪贴板 ==============
 let toastTimer = null;
